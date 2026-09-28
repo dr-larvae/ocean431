@@ -1,0 +1,138 @@
+#This R markdown provide a guided construction of Species Distribution Model of 
+#marine organisms using the SSDM package. 
+
+#Step 1: Loading the library we need to use 
+```{r}
+library(SSDM)
+```
+
+
+#Step 2: Specifiy the path to the present-day environmental data 
+#--------------------------------------------------------------------------------------
+#Note: We are using a Jupyter Hub with all the files pre-loaded in the same folder
+#If you are going to use this file offline on your own device, please make sure you 
+#enter the appropriate path. 
+#To find a path on PC, right click on the file and select properties, the path is the Location 
+#For PC users, make sure you change the backward slash (\) to forward slash (/) 
+# To find a path on Mac, Open Finder.Click View in the top menu bar.Select Show Path Bar. 
+#--------------------------------------------------------------------------------------
+
+```{r}
+Env_present_path <- "C:/Data/UW_work/teaching/ocn431/Fall2026/SDM_Env_data/Present_day"
+```
+
+#Step 3: Load the present-day envriomental data you have selected
+#----------------------------------------------------------------------------------------
+#Make sure each file name is entered exactly as is and that each file name has 
+#paranethesis around them and comma separating each file. 
+#--------------------------------------------------------------------------------------
+```{r}
+Env0 <- load_var(path = Env_present_path, files = c("2000_2019_temp_mean.nc","2000_2019_pH_min.nc"))
+```
+
+#Plot to check the environmental data looks OK 
+```{r}
+plot(Env0)
+```
+
+
+
+#Step 4:  Specifiy the path to the present-day occurence data
+#--------------------------------------------------------------------------------------
+#Note: We are using a Jupyter Hub with all the files pre-loaded in the same folder
+#If you are going to use this file offline on your own device, please make sure you 
+#enter the appropriate path. 
+#--------------------------------------------------------------------------------------
+
+```{r}
+occ_path <- "C:/Data/UW_work/teaching/ocn431/Fall2026/SDM_Occ_data"
+```
+
+
+#Step 5: Load the Occurence Data
+#--------------------------------------------------------------------------------------
+#Note: For this exercise, the occurence data from GBiF has been vetted and trimmed for you
+#You just have to specificy the correct file. Do not change the headers of columns,
+# unless you adjust the naming accordingly in the command below
+#--------------------------------------------------------------------------------------
+```{r}
+Occ0 <- load_occ(
+path = occ_path, Env, file = "spurp2.csv",
+Xcol = "decimalLongitude", Ycol = "decimalLatitude", Spcol = "species", sep = ",")
+```
+
+
+#Step 6: Run the SSDM model 
+```{r}
+SDM_now <- modelling('GLM', Occ0, Env0, Xcol = "decimalLongitude", Ycol = "decimalLatitude", verbose = FALSE)
+```
+
+#Step 7: Plot the modelled habitat suitability
+```{r}
+plot(SDM_now@projection, main = 'Present-day habitat suitability with GLM algorithm')
+```
+#Note: This is a good point to re-evaluate if you need to change the environemtnal variables you have chosen
+#If the suitability map does not make sense, consider adjusting. 
+
+#Step 8: Check model quality and relative importance of the environmental variables 
+```{r}
+SDM_now@evaluation
+SDM_now@variable.importance
+```
+
+#Step 9: Save the present-day suitability model so that you can visualize and compute changes later 
+```{r}
+proj_now <- SDM_now@projection
+```
+
+#Now that you are ready to look forward in time and see how suitability change with anthropogenic climate change 
+#Step 10: Specify the path to the future environmental data 
+```{r}
+Env_future_path <- "C:/Data/UW_work/teaching/ocn431/Fall2026/SDM_Env_data/Future"
+```
+
+#Step 11: Load the future environment data 
+```{r}
+Env_new <- load_var(path = future_path, files = c("future_temp_mean.nc","future_pH_min.nc"))
+```
+
+#Don't forget to plot the future environmental data to check what are the changes 
+```{r}
+plot(Env_new)
+```
+
+#Step 12: Project future habtiat suitability based on the relationships developed based on present-day data 
+```{r}
+ SDM_forecast <- project(SDM, Env_new)	
+```
+
+#Plot and save the future projection
+```{r}
+proj_future <- SDM_forecast@projection
+plot(SDM_forecast@projection, main = 'SDM forecast with GLM algorithm
+under changing climate')
+
+```
+
+
+
+#Step 13: Evaulate the change in suitability 
+
+```{r}
+#Some trick to remove the land area in the map
+ocean_mask <- reclassify(proj_now, cbind(-Inf, Inf, 1))
+proj_area <- area(proj_now) * ocean_mask
+
+#To determine the change in habitable area over time, you need to first decide on a threshold. This threshold correspond to the probability of presence according to your model. For instance, a threshold of 0.1 would mean the model suggests there is a 10% chance for the species of interest to be present at the specific cell (location). Then you can apply the threshold to compute the habitable area for now and future.
+thres <- 0.1
+
+#Compute the present-day and future habtiatble area 
+livable_now <- cellStats(proj_area * (proj_now > thres), sum)
+livable_future <- cellStats(proj_area * (proj_future > thres), sum)
+
+#You can visualize the change in suitability by plotting the difference
+proj_diff <- proj_future - proj_now 
+plot(proj_diff, main = "Change in suitability probability")
+
+```
+
